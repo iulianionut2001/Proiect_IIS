@@ -1,0 +1,112 @@
+-- Drop existing tables if needed
+DROP TABLE IF EXISTS diagnoses;
+DROP TABLE IF EXISTS doctors;
+DROP TABLE IF EXISTS patients;
+
+-- Create patients table
+CREATE TABLE patients (
+  patient_id SERIAL PRIMARY KEY,
+  name VARCHAR(100),
+  age INT,
+  gender VARCHAR(10),
+  disease VARCHAR(100)
+);
+
+-- Create doctors table
+CREATE TABLE doctors (
+  doctor_id SERIAL PRIMARY KEY,
+  name VARCHAR(100),
+  specialization VARCHAR(100),
+  hospital VARCHAR(100)
+);
+
+-- Create diagnoses table
+CREATE TABLE diagnoses (
+  diagnosis_id SERIAL PRIMARY KEY,
+  patient_id INT REFERENCES patients(patient_id),
+  doctor_id INT REFERENCES doctors(doctor_id),
+  disease VARCHAR(100),
+  date_diagnosed DATE
+);
+
+-- Insert 10 doctors
+INSERT INTO doctors (name, specialization, hospital) VALUES
+('Dr. Radu', 'Cardiology', 'City Hospital'),
+('Dr. Pop', 'Endocrinology', 'General Hospital'),
+('Dr. Iliescu', 'Oncology', 'Regional Clinic'),
+('Dr. Stan', 'Pulmonology', 'MedLife Center'),
+('Dr. Vasilescu', 'Rheumatology', 'Central Hospital'),
+('Dr. Toma', 'Nutrition', 'North Medical'),
+('Dr. Marin', 'Internal Medicine', 'South Hospital'),
+('Dr. Oprea', 'Psychiatry', 'East Care'),
+('Dr. Grigore', 'Infectious Diseases', 'West Hospital'),
+('Dr. Gheorghiu', 'General Medicine', 'Sunrise Clinic');
+
+-- Insert 30 patients
+INSERT INTO patients (name, age, gender, disease) VALUES
+('Maria Ionescu', 25, 'Female', 'Diabetes'),
+('Andrei Popescu', 42, 'Male', 'Hypertension'),
+('Elena Georgescu', 35, 'Female', 'Cancer'),
+('Ion Barbu', 60, 'Male', 'Arthritis'),
+('Ana Dumitrescu', 29, 'Female', 'COVID-19'),
+('Radu Marinescu', 50, 'Male', 'Asthma'),
+('Alina Petrescu', 33, 'Female', 'Obesity'),
+('George Tudor', 47, 'Male', 'Flu'),
+('Simona Enache', 38, 'Female', 'Heart Disease'),
+('Vlad Mitrea', 55, 'Male', 'Depression'),
+('Cristina Dobre', 28, 'Female', 'Cancer'),
+('Paul Neagu', 63, 'Male', 'Arthritis'),
+('Laura Zamfir', 31, 'Female', 'Hypertension'),
+('Sorin Pavel', 44, 'Male', 'COVID-19'),
+('Irina Petcu', 37, 'Female', 'Diabetes'),
+('Marius Albu', 59, 'Male', 'Obesity'),
+('Ioana Rosu', 41, 'Female', 'Flu'),
+('Bogdan Lupu', 52, 'Male', 'Cancer'),
+('Delia Manea', 30, 'Female', 'Asthma'),
+('Adrian Sava', 65, 'Male', 'Heart Disease'),
+('Oana Costache', 34, 'Female', 'Depression'),
+('Dan Cristea', 40, 'Male', 'COVID-19'),
+('Monica Nedelcu', 36, 'Female', 'Hypertension'),
+('Gabriel Socol', 53, 'Male', 'Cancer'),
+('Bianca Draghici', 26, 'Female', 'Diabetes'),
+('Florin Ursu', 46, 'Male', 'Flu'),
+('Raluca Ciobanu', 32, 'Female', 'Obesity'),
+('Emil Onea', 39, 'Male', 'Heart Disease'),
+('Larisa Mihai', 43, 'Female', 'Asthma'),
+('Valentin Guta', 61, 'Male', 'Arthritis');
+
+-- Insert 30 diagnoses (Doctor Radu has 6 patients, rest are distributed randomly)
+INSERT INTO diagnoses (patient_id, doctor_id, disease, date_diagnosed) VALUES
+(1, 1, 'Diabetes', '2023-11-01'),
+(2, 1, 'Hypertension', '2023-11-03'),
+(3, 1, 'Cancer', '2023-11-04'),
+(4, 1, 'Arthritis', '2023-11-06'),
+(5, 1, 'COVID-19', '2023-11-07'),
+(6, 1, 'Asthma', '2023-11-08'),
+
+(7, 2, 'Obesity', '2023-11-09'),
+(8, 3, 'Flu', '2023-11-10'),
+(9, 4, 'Heart Disease', '2023-11-11'),
+(10, 5, 'Depression', '2023-11-12'),
+(11, 6, 'Cancer', '2023-11-13'),
+(12, 7, 'Arthritis', '2023-11-14'),
+(13, 8, 'Hypertension', '2023-11-15'),
+(14, 9, 'COVID-19', '2023-11-16'),
+(15, 10, 'Diabetes', '2023-11-17'),
+
+(16, 2, 'Obesity', '2023-11-18'),
+(17, 3, 'Flu', '2023-11-19'),
+(18, 4, 'Cancer', '2023-11-20'),
+(19, 5, 'Asthma', '2023-11-21'),
+(20, 6, 'Heart Disease', '2023-11-22'),
+(21, 7, 'Depression', '2023-11-23'),
+(22, 8, 'COVID-19', '2023-11-24'),
+(23, 9, 'Hypertension', '2023-11-25'),
+(24, 10, 'Cancer', '2023-11-26'),
+
+(25, 2, 'Diabetes', '2023-11-27'),
+(26, 3, 'Flu', '2023-11-28'),
+(27, 4, 'Obesity', '2023-11-29'),
+(28, 5, 'Heart Disease', '2023-11-30'),
+(29, 6, 'Asthma', '2023-12-01'),
+(30, 7, 'Arthritis', '2023-12-02');

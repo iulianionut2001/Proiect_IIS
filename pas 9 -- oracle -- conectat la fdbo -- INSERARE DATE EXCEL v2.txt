@@ -1,0 +1,81 @@
+--------------------------------------------------------------------------------
+-- INTEGRATION MODEL: XLS Views (custom - proiect medical)
+-- Requirement: ExcelTable PL/SQL library installed
+--------------------------------------------------------------------------------
+
+-- DIRECTORY SETUP ------------------------------------------------------------
+DROP DIRECTORY ext_file_ds;
+CREATE OR REPLACE DIRECTORY ext_file_ds AS 'E:\facultate\master\sem2\integrare\EXCEL_PROIECT';
+GRANT ALL ON DIRECTORY ext_file_ds TO PUBLIC;
+
+SELECT * FROM all_directories;
+
+--------------------------------------------------------------------------------
+-- VIEW 1: Insurance Coverage View
+-- Leg?tur? logic?: Disease ? Diagnoses (PostgreSQL) + Treatments (Oracle)
+--------------------------------------------------------------------------------
+DROP VIEW insurance_coverage_view;
+
+CREATE OR REPLACE VIEW insurance_coverage_view AS
+SELECT t.*
+FROM TABLE(
+  ExcelTable.getRows(
+    ExcelTable.getFile('EXT_FILE_DS', 'insurance_coverage.xlsx'),
+    'Sheet1',
+    '"Disease"              VARCHAR2(100),
+     "Coverage_Percentage"  NUMBER,
+     "Insurance_Type"       VARCHAR2(50)',
+    'A2'
+  )
+) t;
+
+-- Test:
+SELECT * FROM insurance_coverage_view;
+
+--------------------------------------------------------------------------------
+-- VIEW 2: Treatment Costs View
+-- Leg?tur? logic?: Disease ? Treatments (Oracle)
+--------------------------------------------------------------------------------
+DROP VIEW treatment_costs_view;
+
+CREATE OR REPLACE VIEW treatment_costs_view AS
+SELECT t.*
+FROM TABLE(
+  ExcelTable.getRows(
+    ExcelTable.getFile('EXT_FILE_DS', 'medic_excel.xlsx'),
+    'treatment_costs',
+    '"disease"            VARCHAR2(100),
+     "average_cost_eur"   NUMBER',
+    'A2'
+  )
+) t;
+
+-- Test:
+SELECT * FROM treatment_costs_view;
+
+--------------------------------------------------------------------------------
+-- VIEW 3: Hospital Resources View
+-- Leg?tur? logic?: Hospital_Name ? Doctors.Hospital (PostgreSQL)
+--------------------------------------------------------------------------------
+DROP VIEW hospital_resources_view;
+
+CREATE OR REPLACE VIEW hospital_resources_view AS
+SELECT t.*
+FROM TABLE(
+  ExcelTable.getRows(
+    ExcelTable.getFile('EXT_FILE_DS', 'medic_excel.xlsx'),
+    'hospital_resources',
+    '"hospital_name"       VARCHAR2(100),
+     "beds_available"      NUMBER,
+     "ventilators"         NUMBER,
+     "doctors_on_staff"    NUMBER',
+    'A2'
+  )
+) t;
+
+
+-- Test:
+SELECT * FROM hospital_resources_view;
+
+--------------------------------------------------------------------------------
+COMMIT;

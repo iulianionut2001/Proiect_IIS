@@ -1,0 +1,63 @@
+use medic;
+
+db.Diseases.drop();
+
+db.Diseases.insertOne({
+  "metadata": {
+    "diseases": [
+      { "name": "diabetes", "category": "chronic", "severity": "moderate", "iscontagious": false },
+      { "name": "hypertension", "category": "chronic", "severity": "moderate", "iscontagious": false },
+      { "name": "cancer", "category": "critical", "severity": "high", "iscontagious": false },
+      { "name": "asthma", "category": "respiratory", "severity": "moderate", "iscontagious": false },
+      { "name": "arthritis", "category": "musculoskeletal", "severity": "low", "iscontagious": false },
+      { "name": "obesity", "category": "chronic", "severity": "moderate", "iscontagious": false },
+      { "name": "heart disease", "category": "cardiac", "severity": "high", "iscontagious": false },
+      { "name": "depression", "category": "mental", "severity": "moderate", "iscontagious": false },
+      { "name": "covid-19", "category": "viral", "severity": "high", "iscontagious": true },
+      { "name": "flu", "category": "viral", "severity": "moderate", "iscontagious": true }
+    ]
+  }
+});
+
+
+
+db.Symptoms.drop();
+
+db.Symptoms.insertOne({
+  "symptom_sets": {
+    "diseases": [
+      { "name": "diabetes", "symptoms": ["thirst", "frequent urination", "blurred vision"] },
+      { "name": "hypertension", "symptoms": ["headache", "dizziness", "nosebleeds"] },
+      { "name": "cancer", "symptoms": ["fatigue", "weight loss", "pain"] },
+      { "name": "asthma", "symptoms": ["shortness of breath", "wheezing", "chest tightness"] },
+      { "name": "arthritis", "symptoms": ["joint pain", "stiffness", "swelling"] },
+      { "name": "obesity", "symptoms": ["weight gain", "fatigue", "shortness of breath"] },
+      { "name": "heart disease", "symptoms": ["chest pain", "shortness of breath", "nausea"] },
+      { "name": "depression", "symptoms": ["sadness", "lack of energy", "sleep problems"] },
+      { "name": "covid-19", "symptoms": ["fever", "cough", "loss of taste or smell"] },
+      { "name": "flu", "symptoms": ["sore throat", "body aches", "fever"] }
+    ]
+  }
+});
+
+
+db.RiskFactors.drop();
+
+db.RiskFactors.insertOne({
+  "factors_by_disease": {
+    "diseases": [
+      { "name": "diabetes", "age_group": "30-60", "gender": "all", "factors": ["obesity", "sedentary lifestyle"] },
+      { "name": "hypertension", "age_group": "40+", "gender": "all", "factors": ["stress", "high salt intake"] },
+      { "name": "cancer", "age_group": "50+", "gender": "all", "factors": ["genetics", "smoking"] },
+      { "name": "asthma", "age_group": "all", "gender": "all", "factors": ["allergies", "pollution"] },
+      { "name": "arthritis", "age_group": "50+", "gender": "all", "factors": ["age", "joint injury"] },
+      { "name": "obesity", "age_group": "20+", "gender": "all", "factors": ["poor diet", "lack of exercise"] },
+      { "name": "heart disease", "age_group": "50+", "gender": "all", "factors": ["cholesterol", "smoking"] },
+      { "name": "depression", "age_group": "all", "gender": "all", "factors": ["trauma", "isolation"] },
+      { "name": "covid-19", "age_group": "all", "gender": "all", "factors": ["contact", "travel"] },
+      { "name": "flu", "age_group": "all", "gender": "all", "factors": ["cold weather", "weak immunity"] }
+    ]
+  }
+});
+
+

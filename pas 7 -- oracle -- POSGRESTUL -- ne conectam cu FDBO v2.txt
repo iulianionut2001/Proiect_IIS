@@ -1,0 +1,71 @@
+-- Verificare simpl? HTTP JSON
+SELECT HTTPURITYPE.createuri('http://localhost:3000/patients').getclob() AS doc FROM dual;
+
+-- ============================================================================
+-- 1. View pentru patients (baza)
+-- ============================================================================
+CREATE OR REPLACE VIEW patients_view AS
+WITH rest_doc AS (
+    SELECT HTTPURITYPE.createuri('http://localhost:3000/patients').getclob() AS doc FROM dual
+)
+SELECT
+    patient_id,
+    name,
+    age,
+    gender,
+    disease
+FROM JSON_TABLE((SELECT doc FROM rest_doc), '$[*]'
+    COLUMNS (
+        patient_id NUMBER(4)     PATH '$.patient_id',
+        name       VARCHAR2(100) PATH '$.name',
+        age        NUMBER(3)     PATH '$.age',
+        gender     VARCHAR2(10)  PATH '$.gender',
+        disease    VARCHAR2(100) PATH '$.disease'
+    )
+);
+
+-- Test
+SELECT * FROM patients_view;
+
+-- ============================================================================
+-- 2. View pentru doctors
+-- ============================================================================
+CREATE OR REPLACE VIEW doctors_view AS
+WITH rest_doc AS (
+    SELECT HTTPURITYPE.createuri('http://localhost:3000/doctors').getclob() AS doc FROM dual
+)
+SELECT *
+FROM JSON_TABLE((SELECT doc FROM rest_doc), '$[*]'
+    COLUMNS (
+        doctor_id      NUMBER(4)     PATH '$.doctor_id',
+        name           VARCHAR2(100) PATH '$.name',
+        specialization VARCHAR2(100) PATH '$.specialization',
+        hospital       VARCHAR2(100) PATH '$.hospital'
+    )
+);
+
+-- Test
+SELECT * FROM doctors_view;
+
+-- ============================================================================
+-- 3. View pentru diagnoses
+-- ============================================================================
+CREATE OR REPLACE VIEW diagnoses_view AS
+WITH rest_doc AS (
+    SELECT HTTPURITYPE.createuri('http://localhost:3000/diagnoses').getclob() AS doc FROM dual
+)
+SELECT *
+FROM JSON_TABLE((SELECT doc FROM rest_doc), '$[*]'
+    COLUMNS (
+        diagnosis_id   NUMBER(6)     PATH '$.diagnosis_id',
+        patient_id     NUMBER(4)     PATH '$.patient_id',
+        doctor_id      NUMBER(4)     PATH '$.doctor_id',
+        disease        VARCHAR2(100) PATH '$.disease',
+        date_diagnosed DATE          PATH '$.date_diagnosed'
+    )
+);
+
+-- Test
+SELECT * FROM diagnoses_view;
+
+COMMIT;

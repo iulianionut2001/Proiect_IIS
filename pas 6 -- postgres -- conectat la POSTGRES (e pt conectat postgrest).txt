@@ -1,0 +1,23 @@
+-- DROP anterior (opțional dacă vrei să refaci)
+-- REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA medics FROM web_anon;
+-- REVOKE usage on schema medics FROM web_anon;
+-- DROP ROLE IF EXISTS authenticator;
+-- DROP ROLE IF EXISTS web_anon;
+
+-- Creăm rolul anonim
+--CREATE ROLE web_anon NOLOGIN;
+
+-- Dăm acces pe schema și tabele
+GRANT USAGE ON SCHEMA medics TO web_anon;
+GRANT SELECT ON ALL TABLES IN SCHEMA medics TO web_anon;
+
+-- (opțional, granturi individuale dacă vrei mai mult control)
+GRANT SELECT ON medics.patients TO web_anon;
+GRANT SELECT ON medics.doctors TO web_anon;
+GRANT SELECT ON medics.diagnoses TO web_anon;
+
+-- Creăm userul real care se autentifică prin PostgREST
+--CREATE ROLE authenticator NOINHERIT LOGIN PASSWORD 'mysecretpassword';
+
+-- Legăm userul real de rolul anonim
+--GRANT web_anon TO authenticator;

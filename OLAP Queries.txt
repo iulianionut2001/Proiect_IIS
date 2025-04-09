@@ -1,0 +1,509 @@
+----------------------------------------------------------------------------------------------------------- OLAP QUERIES -----------------------------------------------------------------------------------------------------------
+
+
+-- 1. OLAP_ORACLE_01_TOP_MEDICATIONS 
+-- Afi?eaz? topul medicamentelor în func?ie de ratingul mediu, ordonate descresc?tor
+
+CREATE OR REPLACE VIEW OLAP_ORACLE_01_TOP_MEDICATIONS AS
+SELECT 
+  m.name AS medication_name,
+  AVG(r.rating) AS avg_rating,
+  RANK() OVER (ORDER BY AVG(r.rating) DESC) AS ranking
+FROM medication_reviews_view r
+JOIN medications_view m ON r.medication_id = m.medication_id
+GROUP BY m.name;
+
+select * from OLAP_ORACLE_01_TOP_MEDICATIONS;  
+
+
+-- 2. OLAP_POSTGRES_01_DISEASE_CUBE
+-- Analiz? a distribu?iei pacien?ilor pe gen, grup? de vârst? ?i boal? – cu toate combina?iile posibile (CUBE)
+CREATE OR REPLACE VIEW OLAP_POSTGRES_01_DISEASE_CUBE AS
+SELECT 
+  NVL(p.gender, ' ') AS gender,
+  NVL(
+    CASE 
+      WHEN p.age < 18 THEN '0-17'
+      WHEN p.age BETWEEN 18 AND 35 THEN '18-35'
+      WHEN p.age BETWEEN 36 AND 60 THEN '36-60'
+      ELSE '60+'
+    END, ' ') AS age_group,
+  NVL(d.disease, ' ') AS disease,
+  COUNT(*) AS nr_pacienti
+FROM PATIENTS_VIEW p
+JOIN DIAGNOSES_VIEW d ON p.patient_id = d.patient_id
+GROUP BY CUBE(
+  p.gender,
+  CASE 
+    WHEN p.age < 18 THEN '0-17'
+    WHEN p.age BETWEEN 18 AND 35 THEN '18-35'
+    WHEN p.age BETWEEN 36 AND 60 THEN '36-60'
+    ELSE '60+' 
+  END,
+  d.disease
+);
+
+              
+select * from OLAP_POSTGRES_01_DISEASE_CUBE;
+
+
+--3 .OLAP_EXCEL_01_INSURANCE_ROLLUP
+-- Media procentului de acoperire a asigur?rii, cu subtotaluri pe tip ?i boal?
+
+CREATE OR REPLACE VIEW OLAP_EXCEL_01_INSURANCE_ROLLUP AS
+SELECT 
+  NVL(i."Insurance_Type", ' ') AS insurance_type,
+  NVL(i."Disease", ' ') AS disease,
+  ROUND(AVG(i."Coverage_Percentage"), 2) AS avg_coverage
+FROM INSURANCE_COVERAGE_VIEW i
+GROUP BY ROLLUP(i."Insurance_Type", i."Disease");
+
+
+select * from OLAP_EXCEL_01_INSURANCE_ROLLUP;
+
+-- 4. OLAP_MONGODB_01_RISK_FACTORS_BY_DISEASE
+-- Num?r de factori de risc în func?ie de boal?, gen ?i grup? de vârst?
+
+CREATE OR REPLACE VIEW OLAP_MONGODB_01_RISK_FACTORS_BY_DISEASE AS
+SELECT 
+  NVL(disease, ' ') AS disease,
+  NVL(factor, ' ') AS factor,
+  NVL(gender, ' ') AS gender,
+  NVL(age_group, ' ') AS age_group,
+  COUNT(*) AS factor_count
+FROM RISK_FACTORS_VIEW
+GROUP BY ROLLUP(disease, factor, gender, age_group);
+
+
+select * from OLAP_MONGODB_01_RISK_FACTORS_BY_DISEASE;
+
+
+-- 5. OLAP_COMBINED_01_MEDICATION_COST_RATING
+-- Analiz? combinat?: ratingul ?i costul mediu al tratamentelor pentru fiecare boal? ?i medicament
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_01_MEDICATION_COST_RATING AS
+SELECT 
+  NVL(d.disease, ' ') AS disease,
+  NVL(t.medication_name, ' ') AS medication_name,
+  ROUND(AVG(t.rating), 2) AS avg_rating,
+  ROUND(AVG(c."average_cost_eur"), 2) AS avg_cost
+FROM TREATMENTS_AGG_VIEW t
+JOIN DIAGNOSES_VIEW d ON t.diagnosis_id = d.diagnosis_id
+LEFT JOIN TREATMENT_COSTS_VIEW c ON LOWER(d.disease) = LOWER(c."disease")
+GROUP BY ROLLUP(d.disease, t.medication_name);
+
+select * from OLAP_COMBINED_01_MEDICATION_COST_RATING;
+
+
+-- 6. OLAP_COMBINED_02_DOCTOR_HOSPITAL_STATS
+-- Statistici despre doctori ?i spitale: nr. doctori, paturi ?i ventilatoare disponibile (cu subtotaluri).
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_02_DOCTOR_HOSPITAL_STATS AS
+SELECT 
+  NVL(h."hospital_name", ' ') AS hospital,
+  NVL(d.specialization, ' ') AS specialization,
+  COUNT(*) AS nr_doctors,
+  MAX(h."beds_available") AS beds,
+  MAX(h."ventilators") AS ventilators
+FROM DOCTORS_VIEW d
+LEFT JOIN HOSPITAL_RESOURCES_VIEW h ON LOWER(d.hospital) = LOWER(h."hospital_name")
+GROUP BY ROLLUP(h."hospital_name", d.specialization);
+
+select * from OLAP_COMBINED_02_DOCTOR_HOSPITAL_STATS;
+
+
+-- 7. OLAP_COMBINED_03_PATIENT_RISK_STATS
+-- Distribu?ia pacien?ilor în func?ie de gen, boal? ?i factor de risc (cu CUBE)
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_03_PATIENT_RISK_STATS AS
+SELECT 
+  NVL(p.gender, ' ') AS gender,
+  NVL(d.disease, ' ') AS disease,
+  NVL(r.factor, ' ') AS risk_factor,
+  COUNT(*) AS nr_pacienti
+FROM PATIENTS_VIEW p
+JOIN DIAGNOSES_VIEW d ON p.patient_id = d.patient_id
+LEFT JOIN RISK_FACTORS_VIEW r ON LOWER(d.disease) = LOWER(r.disease)
+GROUP BY CUBE(p.gender, d.disease, r.factor);
+
+select * from OLAP_COMBINED_03_PATIENT_RISK_STATS;
+
+
+
+-- 8.OLAP_COMBINED_04_DISEASE_SYMPTOMS_TREATMENT
+-- Num?r de tratamente existente pentru fiecare combina?ie boal?-simptom
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_04_DISEASE_SYMPTOMS_TREATMENT AS
+SELECT 
+  NVL(d.disease, ' ') AS disease,
+  NVL(s.symptom, ' ') AS symptom,
+  COUNT(DISTINCT t.treatment_id) AS nr_tratamente
+FROM SYMPTOMS_VIEW s
+JOIN DIAGNOSES_VIEW d ON LOWER(d.disease) = LOWER(s.disease)
+LEFT JOIN TREATMENTS_VIEW t ON d.diagnosis_id = t.diagnosis_id
+GROUP BY CUBE(d.disease, s.symptom);
+
+select * from OLAP_COMBINED_04_DISEASE_SYMPTOMS_TREATMENT;
+
+
+-- 9. OLAP_COMBINED_05_INSURANCE_COVERAGE_STATS
+-- Acoperirea medie a asigur?rii pentru fiecare boal? ?i tip de asigurare (CUBE)
+
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_05_INSURANCE_COVERAGE_STATS AS
+SELECT 
+  NVL(d.disease, ' ') AS disease,
+  NVL(i."Insurance_Type", ' ') AS insurance_type,
+  ROUND(AVG(i."Coverage_Percentage"), 2) AS avg_coverage
+FROM DIAGNOSES_VIEW d
+JOIN INSURANCE_COVERAGE_VIEW i ON LOWER(d.disease) = LOWER(i."Disease")
+GROUP BY CUBE(d.disease, i."Insurance_Type");
+
+select * from OLAP_COMBINED_05_INSURANCE_COVERAGE_STATS;
+
+
+-- 10. OLAP_COMBINED_04_TREATMENT_COSTS_STATS
+-- Media costurilor ?i a ratingurilor pentru fiecare combina?ie boal? + medicament
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_04_TREATMENT_COSTS_STATS AS
+SELECT 
+  NVL(d.disease, ' ') AS disease,
+  NVL(t.medication_name, ' ') AS medication_name,
+  ROUND(AVG(c."average_cost_eur"), 2) AS avg_cost,
+  ROUND(AVG(t.rating), 2) AS avg_rating,
+  COUNT(*) AS nr_tratamente
+FROM TREATMENTS_AGG_VIEW t
+JOIN DIAGNOSES_VIEW d ON t.diagnosis_id = d.diagnosis_id
+JOIN TREATMENT_COSTS_VIEW c ON LOWER(d.disease) = LOWER(c."disease")
+GROUP BY CUBE(d.disease, t.medication_name);
+
+select * from OLAP_COMBINED_04_TREATMENT_COSTS_STATS;
+
+-- 11.  OLAP_COMBINED_05_PATIENT_DISTRIBUTION_STATS
+-- Distribu?ia pacien?ilor pe doctor, spital ?i grup? de vârst?
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_05_PATIENT_DISTRIBUTION_STATS AS
+SELECT 
+  NVL(doc.hospital, ' ') AS hospital,
+  NVL(doc.name, ' ') AS doctor_name,
+  CASE 
+    WHEN p.age < 18 THEN '0-17'
+    WHEN p.age BETWEEN 18 AND 35 THEN '18-35'
+    WHEN p.age BETWEEN 36 AND 60 THEN '36-60'
+    ELSE '60+' 
+  END AS age_group,
+  COUNT(*) AS nr_pacienti
+FROM PATIENTS_VIEW p
+JOIN DIAGNOSES_VIEW d ON p.patient_id = d.patient_id
+JOIN DOCTORS_VIEW doc ON d.doctor_id = doc.doctor_id
+GROUP BY CUBE(doc.hospital, doc.name, 
+  CASE 
+    WHEN p.age < 18 THEN '0-17'
+    WHEN p.age BETWEEN 18 AND 35 THEN '18-35'
+    WHEN p.age BETWEEN 36 AND 60 THEN '36-60'
+    ELSE '60+' 
+  END);
+  
+  select * from OLAP_COMBINED_05_PATIENT_DISTRIBUTION_STATS;
+
+
+
+-- 12.OLAP_COMBINED_06_SYMPTOMS_CATEGORY_OVERVIEW
+-- Num?r de apari?ii ale simptomelor în func?ie de categoria ?i severitatea bolii
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_06_SYMPTOMS_CATEGORY_OVERVIEW AS
+SELECT 
+  NVL(d.category, ' ') AS category,
+  NVL(d.severity, ' ') AS severity,
+  NVL(s.symptom, ' ') AS symptom,
+  COUNT(*) AS appearances
+FROM SYMPTOMS_VIEW s
+JOIN DISEASES_VIEW d ON LOWER(s.disease) = LOWER(d.disease)
+GROUP BY CUBE(d.category, d.severity, s.symptom);
+
+select * from OLAP_COMBINED_06_SYMPTOMS_CATEGORY_OVERVIEW;
+
+
+
+
+-- 13.OLAP_COMBINED_08_MEDICATION_RATING_PIVOT
+-- Pivot: distribu?ia ratingurilor pe medicamente, grupate pe scoruri întregi
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_08_MEDICATION_RATING_PIVOT AS
+SELECT *
+FROM (
+  SELECT 
+    m.name AS medication_name,
+    FLOOR(r.rating) AS rating_group
+  FROM medications_view m
+  JOIN medication_reviews_view r ON m.medication_id = r.medication_id
+)
+PIVOT (
+  COUNT(*) 
+  FOR rating_group IN (3 AS "score_3", 4 AS "score_4", 5 AS "score_5")
+)
+ORDER BY medication_name;
+
+select * from OLAP_COMBINED_08_MEDICATION_RATING_PIVOT;
+
+-- 14. OLAP_COMBINED_09_AVG_RATING_BY_DISEASE_PIVOT
+-- Pivot: ratingul mediu pe boal? pentru fiecare medicament, cu scoruri 
+CREATE OR REPLACE VIEW OLAP_COMBINED_09_AVG_RATING_BY_DISEASE_PIVOT AS
+SELECT 
+  medication_name,
+  NVL(TO_CHAR(ROUND(diabetes, 2)), '-')       AS diabetes,
+  NVL(TO_CHAR(ROUND(hypertension, 2)), '-')   AS hypertension,
+  NVL(TO_CHAR(ROUND(cancer, 2)), '-')         AS cancer,
+  NVL(TO_CHAR(ROUND(asthma, 2)), '-')         AS asthma,
+  NVL(TO_CHAR(ROUND(arthritis, 2)), '-')      AS arthritis,
+  NVL(TO_CHAR(ROUND(obesity, 2)), '-')        AS obesity,
+  NVL(TO_CHAR(ROUND(heart_disease, 2)), '-')  AS heart_disease,
+  NVL(TO_CHAR(ROUND(depression, 2)), '-')     AS depression,
+  NVL(TO_CHAR(ROUND(covid, 2)), '-')          AS covid,
+  NVL(TO_CHAR(ROUND(flu, 2)), '-')            AS flu
+FROM (
+  SELECT 
+    m.name AS medication_name,
+    LOWER(m.disease) AS disease,
+    r.rating
+  FROM medications_view m
+  JOIN medication_reviews_view r ON m.medication_id = r.medication_id
+)
+PIVOT (
+  AVG(rating)
+  FOR disease IN (
+    'diabetes'       AS diabetes,
+    'hypertension'   AS hypertension,
+    'cancer'         AS cancer,
+    'asthma'         AS asthma,
+    'arthritis'      AS arthritis,
+    'obesity'        AS obesity,
+    'heart disease'  AS heart_disease,
+    'depression'     AS depression,
+    'covid-19'       AS covid,
+    'flu'            AS flu
+  )
+)
+ORDER BY medication_name;
+
+select * from OLAP_COMBINED_09_AVG_RATING_BY_DISEASE_PIVOT;
+
+
+-- 15.  OLAP_COMBINED_10_COSTS_ROLLUP_GROUPING
+-- Arat? media procentului de acoperire din asigurare pe boal? ?i tip de asigurare, cu subtotaluri ?i total general
+
+
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_10_COSTS_ROLLUP_GROUPING AS
+SELECT
+  NVL(i."Insurance_Type", 'TOTAL') AS insurance_type,
+  NVL(i."Disease", 'TOTAL') AS disease,
+  ROUND(AVG(i."Coverage_Percentage"), 2) AS avg_coverage,
+  CASE 
+    WHEN GROUPING(i."Insurance_Type") = 1 AND GROUPING(i."Disease") = 0 THEN 'Subtotal pe tip'
+    WHEN GROUPING(i."Insurance_Type") = 0 AND GROUPING(i."Disease") = 1 THEN 'Subtotal pe boala'
+    WHEN GROUPING(i."Insurance_Type") = 1 AND GROUPING(i."Disease") = 1 THEN 'TOTAL GENERAL'
+    ELSE 'Detaliu'
+  END AS rollup_label
+FROM insurance_coverage_view i
+GROUP BY ROLLUP(i."Insurance_Type", i."Disease")
+ORDER BY GROUPING(i."Insurance_Type"), GROUPING(i."Disease"), i."Insurance_Type", i."Disease";
+
+select * from OLAP_COMBINED_10_COSTS_ROLLUP_GROUPING;
+
+
+-- 16. OLAP_COMBINED_11_PATIENTS_BY_CATEGORY
+-- Num?r de pacien?i pentru fiecare boal? ?i categorie
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_11_PATIENTS_BY_CATEGORY AS
+SELECT
+  d.disease,
+  NVL(m.category, 'necunoscut') AS category,
+  COUNT(*) AS nr_pacienti
+FROM diagnoses_view d
+LEFT JOIN diseases_view m ON LOWER(d.disease) = LOWER(m.disease)
+GROUP BY d.disease, m.category
+ORDER BY category, d.disease;
+
+select * from OLAP_COMBINED_11_PATIENTS_BY_CATEGORY;
+
+
+-- 17. OLAP_COMBINED_12_COST_RATING_CATEGORY_ROLLUP
+-- Analiz? complex?: cost, rating ?i categorie, cu subtotaluri ?i etichete clare de agregare.
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_12_COST_RATING_CATEGORY_ROLLUP AS
+SELECT
+  NVL(d.disease, 'TOTAL') AS disease,
+  NVL(c."average_cost_eur", 0) AS cost_eur,
+  NVL(m.category, 'necunoscut') AS disease_category,
+  ROUND(AVG(r.rating), 2) AS avg_rating,
+  CASE
+    WHEN GROUPING(d.disease) = 1 AND GROUPING(m.category) = 0 THEN 'Subtotal pe categorie'
+    WHEN GROUPING(d.disease) = 0 AND GROUPING(m.category) = 1 THEN 'Subtotal pe boala'
+    WHEN GROUPING(d.disease) = 1 AND GROUPING(m.category) = 1 THEN 'TOTAL GENERAL'
+    ELSE 'Detaliu'
+  END AS agregare_nivel
+FROM diagnoses_view d
+JOIN treatment_costs_view c ON LOWER(d.disease) = LOWER(c."disease")
+JOIN diseases_view m ON LOWER(d.disease) = LOWER(m.disease)
+LEFT JOIN treatments_agg_view r ON LOWER(d.disease) = LOWER(r.disease)
+GROUP BY ROLLUP(d.disease, m.category, c."average_cost_eur")
+ORDER BY GROUPING(d.disease), GROUPING(m.category), d.disease;
+
+select * from OLAP_COMBINED_12_COST_RATING_CATEGORY_ROLLUP;
+
+
+
+-- 18. OLAP_GROUPING_SETS_TREATMENTS
+--  Afișează ratingul mediu al tratamentelor, per combinație boală + medicament, doar boală, și total general
+
+CREATE OR REPLACE VIEW OLAP_GROUPING_SETS_TREATMENTS AS
+SELECT 
+  disease,
+  medication_name,
+  ROUND(AVG(rating), 2) AS avg_rating
+FROM TREATMENTS_AGG_VIEW
+GROUP BY GROUPING SETS (
+  (disease, medication_name),
+  (disease),
+  ()
+);
+
+select * from OLAP_GROUPING_SETS_TREATMENTS;
+
+
+
+-- 19. OLAP_LISTAGG_MEDICATIONS_BY_DISEASE 
+--Lista de medicamente recomandate pentru fiecare boală, sub formă de text agregat
+
+CREATE OR REPLACE VIEW OLAP_LISTAGG_MEDICATIONS_BY_DISEASE AS
+SELECT 
+  disease,
+  LISTAGG(DISTINCT medication_name, ', ') 
+    WITHIN GROUP (ORDER BY medication_name) AS meds_list
+FROM TREATMENTS_AGG_VIEW
+GROUP BY disease;
+
+select * from OLAP_LISTAGG_MEDICATIONS_BY_DISEASE;
+
+-- 20. OLAP_PERCENT_COST_DISTRIBUTION
+--Distribuția procentuală a costurilor tratamentelor pe fiecare boală
+
+CREATE OR REPLACE VIEW OLAP_PERCENT_COST_DISTRIBUTION AS
+SELECT 
+  i."disease" AS disease,
+  ROUND(SUM(i."average_cost_eur"), 2) AS total_cost,
+  ROUND(
+    RATIO_TO_REPORT(SUM(i."average_cost_eur")) OVER (), 2
+  ) AS cost_percentage
+FROM TREATMENT_COSTS_VIEW i
+GROUP BY i."disease";
+
+select * from OLAP_PERCENT_COST_DISTRIBUTION;
+
+-- 21. OLAP_COMBINED_15_DISEASES_BY_DATE_PARTS
+--Număr de cazuri pe an, lună, zi și boală, cu subtotaluri
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_15_DISEASES_BY_DATE_PARTS AS
+SELECT
+  EXTRACT(YEAR FROM d.date_diagnosed) AS diagnosis_year,
+  EXTRACT(MONTH FROM d.date_diagnosed) AS diagnosis_month,
+  EXTRACT(DAY FROM d.date_diagnosed) AS diagnosis_day,
+  d.disease,
+  COUNT(*) AS nr_cazuri
+FROM diagnoses_view d
+GROUP BY ROLLUP(
+  EXTRACT(YEAR FROM d.date_diagnosed),
+  EXTRACT(MONTH FROM d.date_diagnosed),
+  EXTRACT(DAY FROM d.date_diagnosed),
+  d.disease
+)
+ORDER BY diagnosis_year, diagnosis_month, diagnosis_day, d.disease;
+
+select * from OLAP_COMBINED_15_DISEASES_BY_DATE_PARTS;
+
+
+-- 22. OLAP_TREATMENT_COST_EVOLUTION
+-- Evoluția costului tratamentului pentru fiecare boală în timp
+
+CREATE OR REPLACE VIEW OLAP_TREATMENT_COST_EVOLUTION AS
+SELECT 
+  d.disease,
+  d.date_diagnosed,
+  ROUND(c."average_cost_eur", 2) AS current_cost,
+  LAG(c."average_cost_eur") OVER (PARTITION BY d.disease ORDER BY d.date_diagnosed) AS prev_cost,
+  LEAD(c."average_cost_eur") OVER (PARTITION BY d.disease ORDER BY d.date_diagnosed) AS next_cost,
+  FIRST_VALUE(c."average_cost_eur") OVER (PARTITION BY d.disease ORDER BY d.date_diagnosed) AS first_cost,
+  LAST_VALUE(c."average_cost_eur") OVER (
+    PARTITION BY d.disease ORDER BY d.date_diagnosed
+    ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+  ) AS last_cost
+FROM DIAGNOSES_VIEW d
+JOIN TREATMENT_COSTS_VIEW c ON LOWER(d.disease) = LOWER(c."disease");
+
+SELECT * FROM OLAP_TREATMENT_COST_EVOLUTION;
+
+-- 23. OLAP_RATING_STDDEV_BY_DISEASE
+--Calculul devierii standard și a mediei ratingului pentru fiecare boală
+
+
+CREATE OR REPLACE VIEW OLAP_RATING_STDDEV_BY_DISEASE AS
+SELECT 
+  m.disease,
+  ROUND(AVG(r.rating), 2) AS avg_rating,
+  ROUND(STDDEV(r.rating), 2) AS rating_stddev,
+  COUNT(*) AS nr_reviews
+FROM MEDICATION_REVIEWS_VIEW r
+JOIN MEDICATIONS_VIEW m ON r.medication_id = m.medication_id
+GROUP BY m.disease;
+
+SELECT * FROM OLAP_RATING_STDDEV_BY_DISEASE;
+
+-- 24. OLAP_TREATMENT_RATING_TREND
+--Tendința ratingurilor în timp pentru tratamente, diferențe în ratinguri
+
+
+CREATE OR REPLACE VIEW OLAP_TREATMENT_RATING_TREND AS
+SELECT 
+  t.treatment_id,
+  d.disease,
+  t.rating,
+  d.date_diagnosed,
+  LAG(t.rating) OVER (PARTITION BY d.disease ORDER BY d.date_diagnosed) AS prev_rating,
+  t.rating - LAG(t.rating) OVER (PARTITION BY d.disease ORDER BY d.date_diagnosed) AS rating_diff
+FROM TREATMENTS_AGG_VIEW t
+JOIN DIAGNOSES_VIEW d ON t.diagnosis_id = d.diagnosis_id;
+
+SELECT * FROM OLAP_TREATMENT_RATING_TREND;
+
+-- 25. OLAP_UNPIVOT_PATIENT_DETAILS
+--Transformă coloanele detalii (gen, vârstă, categorie, severitate) în format vertical prin UNPIVOT
+
+
+CREATE OR REPLACE VIEW OLAP_UNPIVOT_PATIENT_DETAILS AS
+SELECT patient_id, detail_type, detail_value
+FROM (
+  SELECT 
+    p.patient_id,
+    p.gender,
+    TO_CHAR(p.age) AS age,
+    d.category,
+    d.severity
+  FROM patients_view p
+  JOIN diagnoses_view dx ON p.patient_id = dx.patient_id
+  JOIN diseases_view d ON LOWER(dx.disease) = LOWER(d.disease)
+) pivoted
+UNPIVOT INCLUDE NULLS (
+  detail_value FOR detail_type IN (
+    gender AS 'Gender',
+    age AS 'Age',
+    category AS 'Category',
+    severity AS 'Severity'
+  )
+);
+
+select * from OLAP_UNPIVOT_PATIENT_DETAILS;
+
+
+commit;
+

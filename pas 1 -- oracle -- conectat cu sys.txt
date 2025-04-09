@@ -1,0 +1,71 @@
+--------------------------------------------------------------------------------
+-- Connect with SYS on XEPDB1
+--------------------------------------------------------------------------------
+DROP USER medic CASCADE;
+
+CREATE USER medic IDENTIFIED BY medic
+DEFAULT TABLESPACE users
+TEMPORARY TABLESPACE temp
+QUOTA UNLIMITED ON USERS;
+
+GRANT connect, resource TO medic;
+GRANT CREATE VIEW TO medic;
+GRANT create database link TO medic;
+
+--------------------------------------------------------------------------------
+
+DROP USER fdbo CASCADE;
+
+CREATE USER fdbo IDENTIFIED BY fdbo
+DEFAULT TABLESPACE users
+TEMPORARY TABLESPACE temp
+QUOTA UNLIMITED ON USERS;
+
+GRANT connect, resource TO fdbo;
+GRANT CREATE VIEW TO fdbo;
+GRANT create database link TO fdbo;
+
+-- Permisiuni pentru integrare REST și fișiere externe
+GRANT CREATE ANY DIRECTORY TO fdbo;
+GRANT EXECUTE ON utl_http TO fdbo;
+GRANT EXECUTE ON dbms_lob TO fdbo;
+GRANT EXECUTE ON sys.dbms_crypto TO fdbo;
+
+-- Permisiuni suplimentare pentru APEX sau operațiuni complexe
+GRANT CREATE DIMENSION, CREATE JOB, CREATE MATERIALIZED VIEW, CREATE SYNONYM TO fdbo;
+
+-- Setare pentru partajare de URL-uri (RESTHeart, PostgREST etc.)
+BEGIN
+  dbms_network_acl_admin.append_host_ace (
+      host       => '*',
+      lower_port => NULL,
+      upper_port => NULL,
+      ace        => xs$ace_type(privilege_list => xs$name_list('http'),
+                                principal_name => 'fdbo',
+                                principal_type => xs_acl.ptype_db));
+END;
+/
+
+BEGIN
+  dbms_network_acl_admin.append_host_ace (
+      host       => 'localhost',
+      lower_port => 8080,
+      upper_port => 8080,
+      ace        => xs$ace_type(privilege_list => xs$name_list('http'),
+                                principal_name => 'fdbo',
+                                principal_type => xs_acl.ptype_db));
+END;
+/
+
+BEGIN
+  dbms_network_acl_admin.append_host_ace (
+      host       => 'localhost',
+      lower_port => 8090,
+      upper_port => 8090,
+      ace        => xs$ace_type(privilege_list => xs$name_list('http'),
+                                principal_name => 'fdbo',
+                                principal_type => xs_acl.ptype_db));
+END;
+/
+
+COMMIT;

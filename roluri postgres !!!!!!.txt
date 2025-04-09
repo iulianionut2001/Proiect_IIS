@@ -1,0 +1,26 @@
+-- 🧹 (opțional) curățare veche
+/*
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA medics FROM web_anon;
+REVOKE USAGE ON SCHEMA medics FROM web_anon;
+DROP ROLE IF EXISTS authenticator;
+DROP ROLE IF EXISTS web_anon;
+*/
+
+-- 👤 Creare rol web_anon (nu are voie să facă login)
+CREATE ROLE web_anon NOLOGIN;
+
+-- ✅ Acordă acces la schema medics
+GRANT USAGE ON SCHEMA medics TO web_anon;
+
+-- ✅ Permisiuni de SELECT pe toate tabelele
+GRANT SELECT ON ALL TABLES IN SCHEMA medics TO web_anon;
+
+-- ✅ (Opțional dar recomandat) Permisiuni automate pentru viitoarele tabele
+ALTER DEFAULT PRIVILEGES IN SCHEMA medics
+GRANT SELECT ON TABLES TO web_anon;
+
+-- 🔐 Creare rol de autentificare (folosit de PostgREST)
+CREATE ROLE authenticator NOINHERIT LOGIN PASSWORD 'mysecretpassword';
+
+-- 🧩 Conectează autentificatorul cu rolul de acces anonim
+GRANT web_anon TO authenticator;

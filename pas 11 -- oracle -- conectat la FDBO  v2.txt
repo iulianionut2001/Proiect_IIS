@@ -1,0 +1,113 @@
+--------------------------------------------------------------------------------
+-- 28_AM_JSON_MongoDB_View - Proiect Medic
+-- Integrare Oracle cu colec?ii MongoDB expuse prin RESTHeart
+-- RESTHeart URL: http://localhost:8081
+-- MongoDB Database: medic
+-- User: admin / secret
+--------------------------------------------------------------------------------
+
+-- ? 1. Func?ie pentru extragere JSON via HTTP
+CREATE OR REPLACE FUNCTION get_restheart_data_media(pURL VARCHAR2, pUserPass VARCHAR2) 
+RETURN clob IS
+  l_req   UTL_HTTP.req;
+  l_resp  UTL_HTTP.resp;
+  l_buffer clob; 
+BEGIN
+  l_req  := UTL_HTTP.begin_request(pURL);
+  UTL_HTTP.set_header(l_req, 'Authorization', 'Basic ' || 
+    UTL_RAW.cast_to_varchar2(UTL_ENCODE.base64_encode(UTL_I18N.string_to_raw(pUserPass, 'AL32UTF8')))); 
+  l_resp := UTL_HTTP.get_response(l_req);
+  UTL_HTTP.READ_TEXT(l_resp, l_buffer);
+  UTL_HTTP.end_response(l_resp);
+  RETURN l_buffer;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- ? 2. View pentru colec?ia Symptoms
+DROP VIEW symptoms_view;
+
+DROP VIEW symptoms_view;
+
+CREATE OR REPLACE VIEW symptoms_view AS
+WITH json AS (
+  SELECT get_restheart_data_media('http://localhost:8081/medic/Symptoms', 'admin:secret') AS doc FROM dual
+)
+SELECT disease, symptom
+FROM JSON_TABLE(
+  (SELECT doc FROM json),
+  '$.symptom_sets.diseases[*]'
+  COLUMNS (
+    disease  PATH '$.name',
+    nested   PATH '$.symptoms[*]'
+    COLUMNS (
+      symptom PATH '$'
+    )
+  )
+);
+
+-- Test:
+SELECT * FROM symptoms_view;
+
+--------------------------------------------------------------------------------
+-- ? 3. View pentru colec?ia Diseases
+DROP VIEW diseases_view;
+
+CREATE OR REPLACE VIEW diseases_view AS
+WITH json AS (
+  SELECT get_restheart_data_media('http://localhost:8081/medic/Diseases', 'admin:secret') AS doc FROM dual
+)
+SELECT disease, category, severity, iscontagious
+FROM JSON_TABLE(
+  (SELECT doc FROM json),
+  '$.metadata.diseases[*]'
+  COLUMNS (
+    disease       PATH '$.name',
+    category      PATH '$.category',
+    severity      PATH '$.severity',
+    iscontagious  PATH '$.iscontagious'
+  )
+);
+
+-- Test:
+SELECT * FROM diseases_view;
+
+--------------------------------------------------------------------------------
+-- ?? 4. View pentru colec?ia RiskFactors
+DROP VIEW risk_factors_view;
+
+CREATE OR REPLACE VIEW risk_factors_view AS
+WITH json AS (
+  SELECT get_restheart_data_media('http://localhost:8081/medic/RiskFactors', 'admin:secret') AS doc FROM dual
+)
+SELECT disease, factor, age_group, gender
+FROM JSON_TABLE(
+  (SELECT doc FROM json),
+  '$.factors_by_disease.diseases[*]'
+  COLUMNS (
+    disease     PATH '$.name',
+    age_group   PATH '$.age_group',
+    gender      PATH '$.gender',
+    nested      PATH '$.factors[*]'
+    COLUMNS (
+      factor PATH '$'
+    )
+  )
+);
+
+-- Test:
+SELECT * FROM risk_factors_view;
+
+--------------------------------------------------------------------------------
+-- ? Exemplu JOIN Oracle între colec?iile Mongo (via RESTHeart)
+-- Leag? boli din Symptoms ?i metadata din Diseases
+SELECT 
+    s.disease,
+    s.symptom,
+    d.category,
+    d.severity
+FROM symptoms_view s
+JOIN diseases_view d ON s.disease = d.disease;
+
+--------------------------------------------------------------------------------
+COMMIT;

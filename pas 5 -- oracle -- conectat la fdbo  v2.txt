@@ -1,0 +1,95 @@
+-- 🔄 ROLLBACK dacă e cazul
+ROLLBACK;
+
+-- ❌ Închidere DB Link anterior (dacă există deja)
+ALTER SESSION CLOSE DATABASE LINK medicDB;
+
+-- ✅ GRANT-uri necesare (presupunând că userul curent vrea acces la schema `medic`)
+GRANT SELECT ON medications TO public;
+GRANT SELECT ON treatments TO public;
+GRANT SELECT ON medication_reviews TO public;
+
+-- 🔍 Verificări
+SELECT user FROM dual;
+SELECT table_name FROM user_tables;
+
+-- 🔄 Drop & recreate DB Link către schema `medic`
+DROP DATABASE LINK medicDB;
+
+CREATE DATABASE LINK medicDB
+   CONNECT TO medic IDENTIFIED BY medic
+   USING '//localhost:1521/XEPDB1';
+
+-- 🔍 Verificare DB Link
+SELECT * FROM user_db_links;
+SELECT * FROM medications@medicDB;
+
+-- ===============================
+-- 📄 VIEW-URI PE TABELĂ REMOTĂ
+-- ===============================
+
+-- 1. VIEW: medications
+DROP VIEW medications_view;
+
+CREATE OR REPLACE VIEW medications_view AS
+SELECT 
+  medication_id, 
+  name, 
+  disease
+FROM medications@medicDB;
+
+SELECT * FROM medications_view;
+
+-- 2. VIEW: treatments
+DROP VIEW treatments_view;
+
+CREATE OR REPLACE VIEW treatments_view AS
+SELECT 
+  treatment_id, 
+  diagnosis_id, 
+  medication_id
+FROM treatments@medicDB;
+
+SELECT * FROM treatments_view;
+
+-- 3. VIEW: medication_reviews
+DROP VIEW medication_reviews_view;
+
+CREATE OR REPLACE VIEW medication_reviews_view AS
+SELECT 
+  review_id, 
+  medication_id, 
+  patient_id, 
+  review, 
+  rating
+FROM medication_reviews@medicDB;
+
+SELECT * FROM medication_reviews_view;
+
+-- 4. VIEW: tratamente agregate (combinat cu reviews și denumiri medicamente)
+DROP VIEW treatments_agg_view;
+
+CREATE OR REPLACE VIEW treatments_agg_view AS
+SELECT 
+  t.treatment_id, 
+  t.diagnosis_id,
+  m.name AS medication_name,
+  m.disease,
+  r.review,
+  r.rating
+FROM treatments@medicDB t
+JOIN medications@medicDB m ON t.medication_id = m.medication_id
+LEFT JOIN medication_reviews@medicDB r ON t.medication_id = r.medication_id;
+
+SELECT * FROM treatments_agg_view;
+
+-- 5. VIEW: doar pacienți care au recenzii
+DROP VIEW patients_with_reviews_view;
+
+CREATE OR REPLACE VIEW patients_with_reviews_view AS
+SELECT DISTINCT patient_id
+FROM medication_reviews@medicDB;
+
+SELECT * FROM patients_with_reviews_view;
+
+COMMIT;

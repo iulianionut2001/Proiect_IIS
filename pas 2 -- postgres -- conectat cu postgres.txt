@@ -1,0 +1,14 @@
+-- Connect with postgres ON postgres database
+
+CREATE ROLE medics WITH
+    LOGIN
+    NOSUPERUSER
+    NOCREATEDB
+    NOCREATEROLE
+    INHERIT
+    NOREPLICATION
+    CONNECTION LIMIT -1
+    PASSWORD 'medics';
+
+CREATE SCHEMA medics
+    AUTHORIZATION medics;
