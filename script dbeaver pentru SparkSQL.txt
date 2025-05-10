@@ -1,0 +1,296 @@
+-----------------------------------------------------MONGODB-----------------------------------------------------
+
+-- Step 1: Fetch JSON from REST
+SELECT java_method(
+  'org.spark.service.rest.QueryRESTDataService',
+  'getRESTDataDocument',
+  'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/DiseaseView'
+);
+
+-- Step 2: Check schema
+SELECT schema_of_json('[{"name":"diabetes","category":"chronic","severity":"moderate","iscontagious":false}]');
+
+-- Step 3: Create Spark View
+CREATE OR REPLACE VIEW disease_view AS
+WITH json_view AS (
+    SELECT from_json(json_raw.data,
+        'ARRAY<STRUCT<name: STRING, category: STRING, severity: STRING, iscontagious: BOOLEAN>>') array
+    FROM (
+        SELECT java_method(
+          'org.spark.service.rest.QueryRESTDataService',
+          'getRESTDataDocument',
+          'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/DiseaseView'
+        ) AS data
+    ) json_raw
+)
+SELECT v.*
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v;
+
+select * from disease_view;
+
+
+--------------------------------------------------------------------
+
+
+-- Step 1
+SELECT java_method(
+  'org.spark.service.rest.QueryRESTDataService',
+  'getRESTDataDocument',
+  'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/SymptomView'
+);
+
+-- Step 2
+SELECT schema_of_json('[{"name":"diabetes","symptoms":["thirst","frequent urination","blurred vision"]}]');
+
+-- Step 3
+CREATE OR REPLACE VIEW symptom_view AS
+WITH json_view AS (
+    SELECT from_json(json_raw.data,
+        'ARRAY<STRUCT<name: STRING, symptoms: ARRAY<STRING>>>') array
+    FROM (
+        SELECT java_method(
+          'org.spark.service.rest.QueryRESTDataService',
+          'getRESTDataDocument',
+          'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/SymptomView'
+        ) AS data
+    ) json_raw
+)
+SELECT v.name, s AS symptom
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v
+LATERAL VIEW explode(v.symptoms) t AS s;
+
+select * from symptom_view;
+
+
+--------------------------------------------------------------------
+
+
+-- Step 1
+SELECT java_method(
+  'org.spark.service.rest.QueryRESTDataService',
+  'getRESTDataDocument',
+  'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/RiskFactorView'
+);
+
+-- Step 2
+SELECT schema_of_json('[{"name":"diabetes","age_group":"30-60","gender":"all","factors":["obesity","sedentary lifestyle"]}]');
+
+-- Step 3
+CREATE OR REPLACE VIEW riskfactor_view AS
+WITH json_view AS (
+    SELECT from_json(json_raw.data,
+        'ARRAY<STRUCT<name: STRING, age_group: STRING, gender: STRING, factors: ARRAY<STRING>>>') array
+    FROM (
+        SELECT java_method(
+          'org.spark.service.rest.QueryRESTDataService',
+          'getRESTDataDocument',
+          'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/RiskFactorView'
+        ) AS data
+    ) json_raw
+)
+SELECT v.name, v.age_group, v.gender, f AS factor
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v
+LATERAL VIEW explode(v.factors) t AS f;
+
+select * from riskfactor_view;
+
+
+-----------------------------------------------------ORACLE-----------------------------------------------------
+
+
+-- Medication View
+SELECT java_method(
+  'org.spark.service.rest.QueryRESTDataService',
+  'getRESTDataDocument',
+  'http://localhost:8091/DSA_SQL_JPAService/rest/medic/MedicationView');
+
+SELECT schema_of_json('[{"medicationId":1,"name":"metformin","disease":"diabetes"}]');
+
+CREATE OR REPLACE VIEW medication_view AS
+WITH json_view AS (
+    SELECT from_json(json_raw.data,
+        'ARRAY<STRUCT<medicationId: BIGINT, name: STRING, disease: STRING>>') array
+    FROM (
+        SELECT java_method(
+            'org.spark.service.rest.QueryRESTDataService',
+            'getRESTDataDocument',
+            'http://localhost:8091/DSA_SQL_JPAService/rest/medic/MedicationView') AS data
+    ) json_raw
+)
+SELECT v.* 
+FROM json_view 
+LATERAL VIEW explode(array) exploded AS v;
+
+
+select * from medication_view;
+
+
+-- Treatment View
+CREATE OR REPLACE VIEW treatment_view AS
+WITH json_view AS (
+  SELECT from_json(json_raw.data,
+    'ARRAY<STRUCT<treatmentId: BIGINT, diagnosisId: BIGINT, medicationId: BIGINT>>') array
+  FROM (
+    SELECT java_method('org.spark.service.rest.QueryRESTDataService', 'getRESTDataDocument',
+      'http://localhost:8091/DSA_SQL_JPAService/rest/medic/TreatmentView') AS data
+  ) json_raw
+)
+SELECT v.*
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v;
+
+select * from treatment_view;
+
+
+-- Medication Review View
+CREATE OR REPLACE VIEW medication_review_view AS
+WITH json_view AS (
+  SELECT from_json(json_raw.data,
+    'ARRAY<STRUCT<reviewId: BIGINT, medicationId: BIGINT, patientId: BIGINT, review: STRING, rating: DOUBLE>>') array
+  FROM (
+    SELECT java_method('org.spark.service.rest.QueryRESTDataService', 'getRESTDataDocument',
+      'http://localhost:8091/DSA_SQL_JPAService/rest/medic/MedicationReviewView') AS data
+  ) json_raw
+)
+SELECT v.*
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v;
+
+select * from medication_review_view;
+
+
+
+
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------POSTGRES-----------------------------------------------------
+
+
+
+-- Patient View
+CREATE OR REPLACE VIEW patient_view AS
+WITH json_view AS (
+  SELECT from_json(json_raw.data,
+    'ARRAY<STRUCT<patientId: BIGINT, name: STRING, age: INT, gender: STRING, disease: STRING>>') array
+  FROM (
+    SELECT java_method('org.spark.service.rest.QueryRESTDataService', 'getRESTDataDocument',
+      'http://localhost:8090/DSA-SQL-JDBCService/rest/medic/PatientView') AS data
+  ) json_raw
+)
+SELECT v.*
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v;
+
+select * from patient_view;
+
+
+-- Doctor View
+CREATE OR REPLACE VIEW doctor_view AS
+WITH json_view AS (
+  SELECT from_json(json_raw.data,
+    'ARRAY<STRUCT<doctorId: BIGINT, name: STRING, specialization: STRING, hospital: STRING>>') array
+  FROM (
+    SELECT java_method('org.spark.service.rest.QueryRESTDataService', 'getRESTDataDocument',
+      'http://localhost:8090/DSA-SQL-JDBCService/rest/medic/DoctorView') AS data
+  ) json_raw
+)
+SELECT v.*
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v;
+
+
+select * from doctor_view;
+
+-- Diagnoses View
+CREATE OR REPLACE VIEW diagnosis_view AS
+WITH json_view AS (
+  SELECT from_json(json_raw.data,
+    'ARRAY<STRUCT<diagnosisId: BIGINT, patientId: BIGINT, doctorId: BIGINT, disease: STRING, dateDiagnosed: DATE>>') array
+  FROM (
+    SELECT java_method('org.spark.service.rest.QueryRESTDataService', 'getRESTDataDocument',
+      'http://localhost:8090/DSA-SQL-JDBCService/rest/medic/DiagnosesView') AS data
+  ) json_raw
+)
+SELECT v.*
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v;
+
+select * from diagnosis_view;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------EXCEL-----------------------------------------------------
+
+-- Insurance Coverage View
+CREATE OR REPLACE VIEW insurance_coverage_view AS
+WITH json_view AS (
+  SELECT from_json(json_raw.data,
+    'ARRAY<STRUCT<disease: STRING, coveragePercentage: DOUBLE, insuranceType: STRING>>') array
+  FROM (
+    SELECT java_method('org.spark.service.rest.QueryRESTDataService', 'getRESTDataDocument',
+      'http://localhost:8094/DSA-DOC-XLSService/rest/medic/InsuranceCoverageView') AS data
+  ) json_raw
+)
+SELECT v.*
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v;
+
+select * from insurance_coverage_view;
+
+
+-- Treatment Costs View
+CREATE OR REPLACE VIEW treatment_costs_view AS
+WITH json_view AS (
+  SELECT from_json(json_raw.data,
+    'ARRAY<STRUCT<disease: STRING, averageCostEur: DOUBLE>>') array
+  FROM (
+    SELECT java_method('org.spark.service.rest.QueryRESTDataService', 'getRESTDataDocument',
+      'http://localhost:8094/DSA-DOC-XLSService/rest/medic/TreatmentCostsView') AS data
+  ) json_raw
+)
+SELECT v.*
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v;
+
+select * from treatment_costs_view;
+
+
+-- Hospital Resources View
+CREATE OR REPLACE VIEW hospital_resources_view AS
+WITH json_view AS (
+  SELECT from_json(json_raw.data,
+    'ARRAY<STRUCT<hospitalName: STRING, bedsAvailable: INT, ventilators: INT, doctorsOnStaff: INT>>') array
+  FROM (
+    SELECT java_method('org.spark.service.rest.QueryRESTDataService', 'getRESTDataDocument',
+      'http://localhost:8094/DSA-DOC-XLSService/rest/medic/HospitalResourcesView') AS data
+  ) json_raw
+)
+SELECT v.*
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v;
+
+select * from hospital_resources_view;
+

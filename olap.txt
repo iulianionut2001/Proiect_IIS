@@ -1,0 +1,502 @@
+----------------------------OLAPS-------------------------------------------
+
+/* 1. OLAP_ORACLE_01_TOP_MEDICATIONS
+   Afișează topul medicamentelor după ratingul mediu */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_ORACLE_01_TOP_MEDICATIONS */
+
+
+ 
+CREATE OR REPLACE VIEW OLAP_ORACLE_01_TOP_MEDICATIONS AS
+SELECT 
+  m.name AS medication_name,
+  ROUND(AVG(r.rating), 2) AS avg_rating,
+  RANK() OVER (ORDER BY AVG(r.rating) DESC) AS ranking
+FROM medication_review_view r
+JOIN medication_view m ON r.medicationId = m.medicationId
+GROUP BY m.name;
+
+SELECT * FROM OLAP_ORACLE_01_TOP_MEDICATIONS;
+
+
+
+/* 2. OLAP_POSTGRES_01_DISEASE_CUBE
+   Distribuția pacienților pe gen, vârstă și boală (CUBE) */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_POSTGRES_01_DISEASE_CUBE */
+
+
+-- OLAP_POSTGRES_01_DISEASE_CUBE
+CREATE OR REPLACE VIEW OLAP_POSTGRES_01_DISEASE_CUBE AS
+SELECT 
+  NVL(p.gender, 'necunoscut') AS gender,
+  NVL(
+    CASE 
+      WHEN p.age < 18 THEN '0-17'
+      WHEN p.age BETWEEN 18 AND 35 THEN '18-35'
+      WHEN p.age BETWEEN 36 AND 60 THEN '36-60'
+      ELSE '60+'
+    END, 'necunoscut') AS age_group,
+  NVL(d.disease, 'necunoscut') AS disease,
+  COUNT(*) AS nr_pacienti
+FROM patient_view p
+JOIN diagnosis_view d ON p.patientId = d.patientId
+GROUP BY CUBE(
+  p.gender,
+  CASE 
+    WHEN p.age < 18 THEN '0-17'
+    WHEN p.age BETWEEN 18 AND 35 THEN '18-35'
+    WHEN p.age BETWEEN 36 AND 60 THEN '36-60'
+    ELSE '60+' 
+  END,
+  d.disease
+);
+
+SELECT * FROM OLAP_POSTGRES_01_DISEASE_CUBE;
+
+
+
+
+/* 3. OLAP_EXCEL_01_INSURANCE_ROLLUP
+   Media acoperirii asigurării pe tip și boală (ROLLUP) */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_EXCEL_01_INSURANCE_ROLLUP */
+
+
+-- OLAP_EXCEL_01_INSURANCE_ROLLUP
+CREATE OR REPLACE VIEW OLAP_EXCEL_01_INSURANCE_ROLLUP AS
+SELECT 
+  NVL(i.insuranceType, 'necunoscut') AS insurance_type,
+  NVL(i.disease, 'necunoscut') AS disease,
+  ROUND(AVG(i.coveragePercentage), 2) AS avg_coverage
+FROM insurance_coverage_view i
+GROUP BY ROLLUP(i.insuranceType, i.disease);
+
+SELECT * FROM OLAP_EXCEL_01_INSURANCE_ROLLUP;
+
+
+
+
+
+/* 4. OLAP_MONGODB_01_RISK_FACTORS_BY_DISEASE
+   Număr factori de risc per boală, gen și vârstă (ROLLUP) */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_MONGODB_01_RISK_FACTORS_BY_DISEASE */
+
+-- OLAP_MONGODB_01_RISK_FACTORS_BY_DISEASE
+CREATE OR REPLACE VIEW OLAP_MONGODB_01_RISK_FACTORS_BY_DISEASE AS
+SELECT 
+  NVL(name, 'necunoscut') AS disease,
+  NVL(factor, 'necunoscut') AS factor,
+  NVL(gender, 'necunoscut') AS gender,
+  NVL(age_group, 'necunoscut') AS age_group,
+  COUNT(*) AS factor_count
+FROM riskfactor_view
+GROUP BY ROLLUP(name, factor, gender, age_group);
+
+SELECT * FROM OLAP_MONGODB_01_RISK_FACTORS_BY_DISEASE;
+
+
+
+/* 5. OLAP_COMBINED_01_MEDICATION_COST_RATING
+   Ratingul și costul tratamentelor per boală și medicament */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_01_MEDICATION_COST_RATING */
+
+-- OLAP_COMBINED_01_MEDICATION_COST_RATING
+CREATE OR REPLACE VIEW OLAP_COMBINED_01_MEDICATION_COST_RATING AS
+SELECT 
+  NVL(d.disease, 'necunoscut') AS disease,
+  NVL(m.name, 'necunoscut') AS medication_name,
+  ROUND(AVG(r.rating), 2) AS avg_rating,
+  ROUND(AVG(c.averageCostEur), 2) AS avg_cost
+FROM treatment_view t
+JOIN diagnosis_view d ON t.diagnosisId = d.diagnosisId
+JOIN medication_view m ON t.medicationId = m.medicationId
+LEFT JOIN medication_review_view r ON m.medicationId = r.medicationId
+LEFT JOIN treatment_costs_view c ON LOWER(d.disease) = LOWER(c.disease)
+GROUP BY ROLLUP(d.disease, m.name);
+
+SELECT * FROM OLAP_COMBINED_01_MEDICATION_COST_RATING;
+
+
+
+/* 6. OLAP_COMBINED_02_DOCTOR_HOSPITAL_STATS
+   Statistici despre doctori, paturi și ventilatoare */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_02_DOCTOR_HOSPITAL_STATS */
+
+-- OLAP_COMBINED_02_DOCTOR_HOSPITAL_STATS
+CREATE OR REPLACE VIEW OLAP_COMBINED_02_DOCTOR_HOSPITAL_STATS AS
+SELECT 
+  NVL(h.hospitalName, 'necunoscut') AS hospital,
+  NVL(d.specialization, 'necunoscut') AS specialization,
+  COUNT(*) AS nr_doctors,
+  MAX(h.bedsAvailable) AS beds,
+  MAX(h.ventilators) AS ventilators
+FROM doctor_view d
+LEFT JOIN hospital_resources_view h ON LOWER(d.hospital) = LOWER(h.hospitalName)
+GROUP BY ROLLUP(h.hospitalName, d.specialization);
+
+SELECT * FROM OLAP_COMBINED_02_DOCTOR_HOSPITAL_STATS;
+
+
+/* 7. OLAP_COMBINED_03_PATIENT_RISK_STATS
+   Pacienți pe gen, boală, factor risc (CUBE) */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_03_PATIENT_RISK_STATS */
+
+-- OLAP_COMBINED_03_PATIENT_RISK_STATS
+CREATE OR REPLACE VIEW OLAP_COMBINED_03_PATIENT_RISK_STATS AS
+SELECT 
+  NVL(p.gender, 'necunoscut') AS gender,
+  NVL(d.disease, 'necunoscut') AS disease,
+  NVL(r.factor, 'necunoscut') AS risk_factor,
+  COUNT(*) AS nr_pacienti
+FROM patient_view p
+JOIN diagnosis_view d ON p.patientId = d.patientId
+LEFT JOIN riskfactor_view r ON LOWER(d.disease) = LOWER(r.name)
+GROUP BY CUBE(p.gender, d.disease, r.factor);
+
+SELECT * FROM OLAP_COMBINED_03_PATIENT_RISK_STATS;
+
+
+/* 8. OLAP_COMBINED_04_DISEASE_SYMPTOMS_TREATMENT
+   Număr tratamente pentru combinație boală + simptom */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_04_DISEASE_SYMPTOMS_TREATMENT */
+
+-- OLAP_COMBINED_04_DISEASE_SYMPTOMS_TREATMENT
+CREATE OR REPLACE VIEW OLAP_COMBINED_04_DISEASE_SYMPTOMS_TREATMENT AS
+SELECT 
+  NVL(d.disease, 'necunoscut') AS disease,
+  NVL(s.symptom, 'necunoscut') AS symptom,
+  COUNT(DISTINCT t.treatmentId) AS nr_tratamente
+FROM symptom_view s
+JOIN diagnosis_view d ON LOWER(s.name) = LOWER(d.disease)
+LEFT JOIN treatment_view t ON d.diagnosisId = t.diagnosisId
+GROUP BY CUBE(d.disease, s.symptom);
+
+SELECT * FROM OLAP_COMBINED_04_DISEASE_SYMPTOMS_TREATMENT;
+
+
+/* 
+. OLAP_COMBINED_09_AVG_RATING_BY_DISEASE_PIVOT
+   Descriere: Pivot cu rating mediu per boală pentru fiecare medicament.
+   Reformulare cu AVG(CASE WHEN ...) în loc de PIVOT.
+   URL: http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_09_AVG_RATING_BY_DISEASE_PIVOT
+*/
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_09_AVG_RATING_BY_DISEASE_PIVOT AS
+SELECT 
+  m.name AS medication_name,
+  ROUND(AVG(CASE WHEN LOWER(m.disease) = 'diabetes' THEN r.rating END), 2) AS diabetes,
+  ROUND(AVG(CASE WHEN LOWER(m.disease) = 'hypertension' THEN r.rating END), 2) AS hypertension,
+  ROUND(AVG(CASE WHEN LOWER(m.disease) = 'cancer' THEN r.rating END), 2) AS cancer,
+  ROUND(AVG(CASE WHEN LOWER(m.disease) = 'asthma' THEN r.rating END), 2) AS asthma,
+  ROUND(AVG(CASE WHEN LOWER(m.disease) = 'arthritis' THEN r.rating END), 2) AS arthritis,
+  ROUND(AVG(CASE WHEN LOWER(m.disease) = 'obesity' THEN r.rating END), 2) AS obesity,
+  ROUND(AVG(CASE WHEN LOWER(m.disease) = 'heart disease' THEN r.rating END), 2) AS heart_disease,
+  ROUND(AVG(CASE WHEN LOWER(m.disease) = 'depression' THEN r.rating END), 2) AS depression,
+  ROUND(AVG(CASE WHEN LOWER(m.disease) = 'covid-19' THEN r.rating END), 2) AS covid,
+  ROUND(AVG(CASE WHEN LOWER(m.disease) = 'flu' THEN r.rating END), 2) AS flu
+FROM medication_view m
+JOIN medication_review_view r ON m.medicationId = r.medicationId
+GROUP BY m.name;
+
+select * from OLAP_COMBINED_09_AVG_RATING_BY_DISEASE_PIVOT;
+
+/*
+OLAP_COMBINED_10_COSTS_ROLLUP_GROUPING
+   Descriere: Media acoperirii de asigurare pe boală și tip, cu etichete pentru subtotaluri și total.
+   Reformulare fără funcția GROUPING().
+   URL: http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_10_COSTS_ROLLUP_GROUPING
+*/
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_10_COSTS_ROLLUP_GROUPING AS
+SELECT
+  COALESCE(i.insuranceType, 'TOTAL') AS insurance_type,
+  COALESCE(i.disease, 'TOTAL') AS disease,
+  ROUND(AVG(i.coveragePercentage), 2) AS avg_coverage,
+  CASE 
+    WHEN i.insuranceType IS NULL AND i.disease IS NOT NULL THEN 'Subtotal pe boala'
+    WHEN i.insuranceType IS NOT NULL AND i.disease IS NULL THEN 'Subtotal pe tip'
+    WHEN i.insuranceType IS NULL AND i.disease IS NULL THEN 'TOTAL GENERAL'
+    ELSE 'Detaliu'
+  END AS rollup_label
+FROM insurance_coverage_view i
+GROUP BY ROLLUP(i.insuranceType, i.disease)
+ORDER BY insurance_type, disease;
+
+select * from OLAP_COMBINED_10_COSTS_ROLLUP_GROUPING;
+
+/* 
+	 OLAP_UNPIVOT_PATIENT_DETAILS
+   Descriere: Transformă detalii despre pacienți (gen, vârstă, categorie, severitate) în format vertical.
+   Reformulare sigură fără duplicări, folosind arrays și explode().
+   URL: http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_UNPIVOT_PATIENT_DETAILS
+*/
+
+CREATE OR REPLACE VIEW OLAP_UNPIVOT_PATIENT_DETAILS AS
+SELECT 
+  patient_id,
+  detail_type,
+  detail_value
+FROM (
+  SELECT 
+    p.patientId AS patient_id,
+    array('Gender', 'Age', 'Category', 'Severity') AS detail_type_array,
+    array(p.gender, CAST(p.age AS STRING), d.category, d.severity) AS detail_value_array
+  FROM patient_view p
+  JOIN diagnosis_view dx ON p.patientId = dx.patientId
+  JOIN disease_view d ON LOWER(dx.disease) = LOWER(d.name)
+) AS base
+LATERAL VIEW posexplode(detail_type_array) dt AS idx, detail_type
+LATERAL VIEW posexplode(detail_value_array) dv AS idx2, detail_value
+WHERE dt.idx = dv.idx2;
+
+select * from OLAP_UNPIVOT_PATIENT_DETAILS; 
+
+
+
+/* 9. OLAP_COMBINED_05_INSURANCE_COVERAGE_STATS
+   Acoperirea asigurării per boală și tip (CUBE) */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_05_INSURANCE_COVERAGE_STATS */
+
+-- OLAP_COMBINED_05_INSURANCE_COVERAGE_STATS
+CREATE OR REPLACE VIEW OLAP_COMBINED_05_INSURANCE_COVERAGE_STATS AS
+SELECT 
+  NVL(d.disease, 'necunoscut') AS disease,
+  NVL(i.insuranceType, 'necunoscut') AS insurance_type,
+  ROUND(AVG(i.coveragePercentage), 2) AS avg_coverage
+FROM diagnosis_view d
+JOIN insurance_coverage_view i ON LOWER(d.disease) = LOWER(i.disease)
+GROUP BY CUBE(d.disease, i.insuranceType);
+
+SELECT * FROM OLAP_COMBINED_05_INSURANCE_COVERAGE_STATS;
+
+
+
+
+/* 10. OLAP_COMBINED_04_TREATMENT_COSTS_STATS
+    Cost și rating mediu pe boală și medicament */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_04_TREATMENT_COSTS_STATS */
+
+-- OLAP_COMBINED_04_TREATMENT_COSTS_STATS
+CREATE OR REPLACE VIEW OLAP_COMBINED_04_TREATMENT_COSTS_STATS AS
+SELECT 
+  NVL(d.disease, 'necunoscut') AS disease,
+  NVL(m.name, 'necunoscut') AS medication_name,
+  ROUND(AVG(c.averageCostEur), 2) AS avg_cost,
+  ROUND(AVG(r.rating), 2) AS avg_rating,
+  COUNT(*) AS nr_tratamente
+FROM treatment_view t
+JOIN diagnosis_view d ON t.diagnosisId = d.diagnosisId
+JOIN medication_view m ON t.medicationId = m.medicationId
+LEFT JOIN medication_review_view r ON m.medicationId = r.medicationId
+JOIN treatment_costs_view c ON LOWER(d.disease) = LOWER(c.disease)
+GROUP BY CUBE(d.disease, m.name);
+
+SELECT * FROM OLAP_COMBINED_04_TREATMENT_COSTS_STATS;
+
+
+/* 11. OLAP_COMBINED_05_PATIENT_DISTRIBUTION_STATS
+    Distribuția pacienților pe spital, doctor și vârstă */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_05_PATIENT_DISTRIBUTION_STATS */
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_05_PATIENT_DISTRIBUTION_STATS AS
+SELECT 
+  NVL(d.hospital, 'necunoscut') AS hospital,
+  NVL(d.name, 'necunoscut') AS doctor_name,
+  CASE 
+    WHEN p.age < 18 THEN '0-17'
+    WHEN p.age BETWEEN 18 AND 35 THEN '18-35'
+    WHEN p.age BETWEEN 36 AND 60 THEN '36-60'
+    ELSE '60+'
+  END AS age_group,
+  COUNT(*) AS nr_pacienti
+FROM patient_view p
+JOIN diagnosis_view dx ON p.patientId = dx.patientId
+JOIN doctor_view d ON dx.doctorId = d.doctorId
+GROUP BY CUBE(d.hospital, d.name, 
+  CASE 
+    WHEN p.age < 18 THEN '0-17'
+    WHEN p.age BETWEEN 18 AND 35 THEN '18-35'
+    WHEN p.age BETWEEN 36 AND 60 THEN '36-60'
+    ELSE '60+'
+  END);
+
+select * from OLAP_COMBINED_05_PATIENT_DISTRIBUTION_STATS;
+
+
+
+/* 12. OLAP_COMBINED_06_SYMPTOMS_CATEGORY_OVERVIEW
+    Număr de apariții ale simptomelor per categorie și severitate */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_06_SYMPTOMS_CATEGORY_OVERVIEW */
+
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_06_SYMPTOMS_CATEGORY_OVERVIEW AS
+SELECT 
+  NVL(d.category, 'necunoscut') AS category,
+  NVL(d.severity, 'necunoscut') AS severity,
+  NVL(s.symptom, 'necunoscut') AS symptom,
+  COUNT(*) AS appearances
+FROM symptom_view s
+JOIN disease_view d ON LOWER(s.name) = LOWER(d.name)
+GROUP BY CUBE(d.category, d.severity, s.symptom);
+select * from OLAP_COMBINED_06_SYMPTOMS_CATEGORY_OVERVIEW;
+
+
+
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_08_MEDICATION_RATING_PIVOT AS
+SELECT *
+FROM (
+  SELECT 
+    m.name AS medication_name,
+    FLOOR(r.rating) AS rating_group
+  FROM medication_view m
+  JOIN medication_review_view r ON m.medicationId = r.medicationId
+)
+PIVOT (
+  COUNT(*) FOR rating_group IN (3 AS score_3, 4 AS score_4, 5 AS score_5)
+)
+ORDER BY medication_name;
+
+select * from OLAP_COMBINED_08_MEDICATION_RATING_PIVOT;
+
+
+
+
+/* 13. OLAP_COMBINED_11_PATIENTS_BY_CATEGORY
+    Număr de pacienți pe boală și categorie */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_11_PATIENTS_BY_CATEGORY */
+
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_11_PATIENTS_BY_CATEGORY AS
+SELECT
+  d.disease,
+  NVL(m.category, 'necunoscut') AS category,
+  COUNT(*) AS nr_pacienti
+FROM diagnosis_view d
+LEFT JOIN disease_view m ON LOWER(d.disease) = LOWER(m.name)
+GROUP BY d.disease, m.category
+ORDER BY category, d.disease;
+
+select * from OLAP_COMBINED_11_PATIENTS_BY_CATEGORY;
+
+
+
+CREATE OR REPLACE VIEW OLAP_GROUPING_SETS_TREATMENTS AS
+SELECT 
+  disease,
+  medication_name,
+  ROUND(AVG(rating), 2) AS avg_rating
+FROM (
+  SELECT d.disease, m.name AS medication_name, r.rating
+  FROM diagnosis_view d
+  JOIN treatment_view t ON d.diagnosisId = t.diagnosisId
+  JOIN medication_view m ON t.medicationId = m.medicationId
+  JOIN medication_review_view r ON m.medicationId = r.medicationId
+)
+GROUP BY GROUPING SETS (
+  (disease, medication_name),
+  (disease),
+  ()
+);
+
+select * from OLAP_GROUPING_SETS_TREATMENTS;
+
+
+
+/* 14. OLAP_COMBINED_15_DISEASES_BY_DATE_PARTS
+    Cazuri pe an, lună, zi și boală (ROLLUP) */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_COMBINED_15_DISEASES_BY_DATE_PARTS */
+
+
+
+CREATE OR REPLACE VIEW OLAP_COMBINED_15_DISEASES_BY_DATE_PARTS AS
+SELECT
+  EXTRACT(YEAR FROM dateDiagnosed) AS diagnosis_year,
+  EXTRACT(MONTH FROM dateDiagnosed) AS diagnosis_month,
+  EXTRACT(DAY FROM dateDiagnosed) AS diagnosis_day,
+  disease,
+  COUNT(*) AS nr_cazuri
+FROM diagnosis_view
+GROUP BY ROLLUP(
+  EXTRACT(YEAR FROM dateDiagnosed),
+  EXTRACT(MONTH FROM dateDiagnosed),
+  EXTRACT(DAY FROM dateDiagnosed),
+  disease
+)
+ORDER BY diagnosis_year, diagnosis_month, diagnosis_day, disease;
+
+select * from OLAP_COMBINED_15_DISEASES_BY_DATE_PARTS;
+
+
+
+
+/* 15. OLAP_TREATMENT_COST_EVOLUTION
+    Evoluția costului tratamentului în timp (LAG, LEAD) */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_TREATMENT_COST_EVOLUTION */
+
+
+CREATE OR REPLACE VIEW OLAP_TREATMENT_COST_EVOLUTION AS
+SELECT 
+  d.disease,
+  d.dateDiagnosed,
+  ROUND(c.averageCostEur, 2) AS current_cost,
+  LAG(c.averageCostEur) OVER (PARTITION BY d.disease ORDER BY d.dateDiagnosed) AS prev_cost,
+  LEAD(c.averageCostEur) OVER (PARTITION BY d.disease ORDER BY d.dateDiagnosed) AS next_cost,
+  FIRST_VALUE(c.averageCostEur) OVER (PARTITION BY d.disease ORDER BY d.dateDiagnosed) AS first_cost,
+  LAST_VALUE(c.averageCostEur) OVER (
+    PARTITION BY d.disease ORDER BY d.dateDiagnosed
+    ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+  ) AS last_cost
+FROM diagnosis_view d
+JOIN treatment_costs_view c ON LOWER(d.disease) = LOWER(c.disease);
+
+select * from OLAP_TREATMENT_COST_EVOLUTION;
+
+
+
+
+/* 16. OLAP_RATING_STDDEV_BY_DISEASE
+    Medie și abatere standard ratinguri pe boală */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_RATING_STDDEV_BY_DISEASE */
+
+CREATE OR REPLACE VIEW OLAP_RATING_STDDEV_BY_DISEASE AS
+SELECT 
+  m.disease,
+  ROUND(AVG(r.rating), 2) AS avg_rating,
+  ROUND(STDDEV(r.rating), 2) AS rating_stddev,
+  COUNT(*) AS nr_reviews
+FROM medication_review_view r
+JOIN medication_view m ON r.medicationId = m.medicationId
+GROUP BY m.disease;
+
+
+select * from OLAP_RATING_STDDEV_BY_DISEASE;
+
+
+
+/* 17. OLAP_TREATMENT_RATING_TREND
+    Tendința ratingurilor în timp pentru tratamente */
+/* http://localhost:9990/DSA-SparkSQL-Service/rest/view/OLAP_TREATMENT_RATING_TREND */
+CREATE OR REPLACE VIEW OLAP_TREATMENT_RATING_TREND AS
+SELECT 
+  t.treatmentId,
+  d.disease,
+  r.rating,
+  d.dateDiagnosed,
+  LAG(r.rating) OVER (PARTITION BY d.disease ORDER BY d.dateDiagnosed) AS prev_rating,
+  r.rating - LAG(r.rating) OVER (PARTITION BY d.disease ORDER BY d.dateDiagnosed) AS rating_diff
+FROM diagnosis_view d
+JOIN treatment_view t ON d.diagnosisId = t.diagnosisId
+JOIN medication_view m ON t.medicationId = m.medicationId
+JOIN medication_review_view r ON m.medicationId = r.medicationId;
+
+select * from OLAP_TREATMENT_RATING_TREND;
+
+
+
+
+------------------------------------------------------------bonus------------------------------------------------------------
+
+
+
+
+
+

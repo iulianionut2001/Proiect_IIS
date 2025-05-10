@@ -1,0 +1,107 @@
+sparksql
+
+mongo
+
+
+-- Step 1: Fetch JSON from REST
+SELECT java_method(
+  'org.spark.service.rest.QueryRESTDataService',
+  'getRESTDataDocument',
+  'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/DiseaseView'
+);
+
+-- Step 2: Check schema
+SELECT schema_of_json('[{"name":"diabetes","category":"chronic","severity":"moderate","iscontagious":false}]');
+
+-- Step 3: Create Spark View
+CREATE OR REPLACE VIEW disease_view AS
+WITH json_view AS (
+    SELECT from_json(json_raw.data,
+        'ARRAY<STRUCT<name: STRING, category: STRING, severity: STRING, iscontagious: BOOLEAN>>') array
+    FROM (
+        SELECT java_method(
+          'org.spark.service.rest.QueryRESTDataService',
+          'getRESTDataDocument',
+          'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/DiseaseView'
+        ) AS data
+    ) json_raw
+)
+SELECT v.*
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v;
+
+select * from disease_view;
+
+
+--------------------------------------------------------------------
+
+
+-- Step 1
+SELECT java_method(
+  'org.spark.service.rest.QueryRESTDataService',
+  'getRESTDataDocument',
+  'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/SymptomView'
+);
+
+-- Step 2
+SELECT schema_of_json('[{"name":"diabetes","symptoms":["thirst","frequent urination","blurred vision"]}]');
+
+-- Step 3
+CREATE OR REPLACE VIEW symptom_view AS
+WITH json_view AS (
+    SELECT from_json(json_raw.data,
+        'ARRAY<STRUCT<name: STRING, symptoms: ARRAY<STRING>>>') array
+    FROM (
+        SELECT java_method(
+          'org.spark.service.rest.QueryRESTDataService',
+          'getRESTDataDocument',
+          'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/SymptomView'
+        ) AS data
+    ) json_raw
+)
+SELECT v.name, s AS symptom
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v
+LATERAL VIEW explode(v.symptoms) t AS s;
+
+select * from symptom_view;
+
+
+--------------------------------------------------------------------
+
+
+-- Step 1
+SELECT java_method(
+  'org.spark.service.rest.QueryRESTDataService',
+  'getRESTDataDocument',
+  'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/RiskFactorView'
+);
+
+-- Step 2
+SELECT schema_of_json('[{"name":"diabetes","age_group":"30-60","gender":"all","factors":["obesity","sedentary lifestyle"]}]');
+
+-- Step 3
+CREATE OR REPLACE VIEW riskfactor_view AS
+WITH json_view AS (
+    SELECT from_json(json_raw.data,
+        'ARRAY<STRUCT<name: STRING, age_group: STRING, gender: STRING, factors: ARRAY<STRING>>>') array
+    FROM (
+        SELECT java_method(
+          'org.spark.service.rest.QueryRESTDataService',
+          'getRESTDataDocument',
+          'http://localhost:8093/DSA-NoSQL-MongoDBService/rest/medic/RiskFactorView'
+        ) AS data
+    ) json_raw
+)
+SELECT v.name, v.age_group, v.gender, f AS factor
+FROM json_view
+LATERAL VIEW explode(array) exploded AS v
+LATERAL VIEW explode(v.factors) t AS f;
+
+select * from riskfactor_view;
+
+
+
+
+
+
